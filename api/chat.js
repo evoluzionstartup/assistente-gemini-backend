@@ -3,7 +3,6 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 module.exports = async (req, res) => {
     // Permite que seu frontend (advocacia.site) se comunique com este backend
-    // MUITO IMPORTANTE: Substitua 'https://www.advocacia.site' pela URL EXATA do seu site
     res.setHeader('Access-Control-Allow-Origin', 'https://www.advocacia.site');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -27,36 +26,56 @@ module.exports = async (req, res) => {
     const genAI = new GoogleGenerativeAI(API_KEY);
 
     try {
-        const { message, language } = req.body; // Agora recebemos também o idioma
+        // Recebe as variáveis de contexto e o estágio da conversa
+        const { message, language, chatHistory, originCountry, currentLocation, currentStatus, destinationCountry, objective, conversationStage } = req.body; 
 
         if (!message) {
             return res.status(400).json({ error: 'Mensagem não fornecida.' });
         }
 
-        // --- PROMPT DA IA APRIMORADO E MULTILÍNGUE ---
-        // O prompt agora instrui a IA a responder no idioma especificado
-        let fullPrompt = `Você é um Assistente Migratório Humanitário chamado "Assistente Evoluzion".
+        // --- PROMPT DA IA APRIMORADO PARA DETECÇÃO DE IDIOMA ---
+        let systemInstruction = `Você é um Assistente Migratório Humanitário chamado "Assistente Evoluzion".
         Seu principal objetivo é fornecer informações claras, amigáveis, empáticas e úteis sobre processos migratórios, documentos, requisitos e custos gerais.
         Sua comunicação deve ser sempre em tom de AMIZADE, clareza e apontar caminhos possíveis.
         Você deve ser prestativo e acolhedor.
 
-        **Responda SEMPRE no idioma correspondente ao código "${language}".**
+        **Instrução CRÍTICA de Idioma:** Detecte o idioma da **última mensagem do usuário** e responda **EXCLUSIVAMENTE naquele idioma**. Se a última mensagem do usuário for em Português, responda em Português. Se for em Hindi, responda em Hindi. Se for em uma mistura, tente responder no idioma predominante.
 
-        **Diretrizes:**
-        - **Informações Específicas:** Se o usuário perguntar sobre um país específico ou tipo de visto (ex: "Visto de trabalho para Portugal", "Refúgio no Brasil"), tente fornecer o máximo de detalhes gerais possíveis (documentos comuns, órgãos, estimativas de tempo/custo, links para sites oficiais se souber).
+        **Diretrizes Gerais:**
         - **Não Dê Aconselhamento Jurídico Direto:** Deixe claro que suas informações são para orientação geral e que o usuário deve sempre consultar um advogado de imigração para seu caso específico. Use frases como "Minhas informações são para fins de orientação geral e não substituem o aconselhamento jurídico de um profissional."
-        - **Custos:** Forneça estimativas de custos (taxas governamentais, passaporte, traduções juramentadas, apostilamento, advogados) sempre que possível, mas sempre ressalte que são *estimativas* e podem variar.
-        - **Links:** Se puder, inclua links para órgãos oficiais (embaixadas, consulados, sites governamentais de imigração).
-        - **Perguntas de Contexto:** Se a pergunta do usuário for muito genérica ("Quero imigrar"), peça mais detalhes para poder ajudar melhor (ex: "Para qual país você gostaria de ir?", "Qual o seu objetivo: trabalho, estudo, moradia, refúgio?").
-        - **Apoio Humano:** Ao final de respostas mais complexas ou quando apropriado, reforce a importância do apoio humano e direcione para o contato do especialista (WhatsApp), como já fazemos no frontend.
+        - **Apoio Humano:** Ao final de respostas mais complexas ou quando apropriado, reforce a importância do apoio humano e direcione para o contato do especialista (WhatsApp).`;
 
-        Pergunta do usuário: "${message}"
+        let userQueryForAI = message; // A mensagem que o usuário digitou
 
-        Sua resposta:`;
+        // Se o estágio for de geração de roteiro, construímos um prompt detalhado para a IA
+        if (conversationStage === 'ask_objective') { // Este é o estágio onde o frontend envia a query completa
+            userQueryForAI = `O usuário forneceu as seguintes informações:
+            - País de origem/nascimento: ${originCountry}
+            - Localização atual: ${currentLocation}
+            ${currentStatus ? `- Condição atual: ${currentStatus}` : ''}
+            - País de destino/regularização: ${destinationCountry}
+            - Objetivo: ${objective}
 
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            Com base nessas informações, por favor, forneça um roteiro passo a passo personalizado. Inclua:
+            - Documentos e requisitos necessários.
+            - Custos e valores estimados (taxas governamentais, traduções juramentadas, apostilamentos, serviços de terceiros como advogados/assessoria jurídica).
+            - Mencione caminhos alternativos que possam diminuir os prazos.
+            - **EXCLUA** valores como passagem, viagem, alimentação, hospedagem.
+            - Ao final, **INDIQUE** como melhor caminho inicial contratar uma assessoria jurídica e o acompanhamento especializado para ter segurança jurídica e paz durante todo o processo.
+            - Mantenha a resposta concisa, mas completa, com no máximo 3-4 parágrafos.
+            `;
+        }
 
-        const result = await model.generateContent(fullPrompt);
+        const model = genAI.getGenerativeModel({
+            model: "gemini-1.5-flash",
+            systemInstruction: { parts: [{ text: systemInstruction }] }
+        });
+
+        const chat = model.startChat({
+            history: chatHistory // Passa o histórico completo da conversa
+        });
+
+        const result = await chat.sendMessage(userQueryForAI); // Envia a mensagem do usuário (ou o prompt completo)
         const response = await result.response;
         const text = response.text();
 
