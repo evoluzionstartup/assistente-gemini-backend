@@ -20,26 +20,28 @@ module.exports = async (req, res) => {
     const API_KEY = process.env.GEMINI_API_KEY; // A chave será puxada das variáveis de ambiente do Vercel
 
     if (!API_KEY) {
-        return res.status(500).json({ error: 'Chave de API do Gemini não configurada no Vercel.' });
+        // Loga um erro claro se a chave não estiver configurada
+        console.error('Erro de Configuração: Chave de API do Gemini não configurada no Vercel.');
+        return res.status(500).json({ error: 'Erro interno: Chave de API não configurada.' });
     }
 
     const genAI = new GoogleGenerativeAI(API_KEY);
 
     try {
-        const { message, paisOrigem, paisDestino, tipoServico } = req.body;
+        const { message } = req.body;
 
         if (!message) {
             return res.status(400).json({ error: 'Mensagem não fornecida.' });
         }
 
-        // Constrói o prompt para o Gemini com o contexto do usuário
-        let fullPrompt = `Você é um assistente migratório humanitário. Responda à pergunta do usuário de forma clara, amigável e com informações que ajudem no processo migratório. Mantenha um tom profissional mas acolhedor. Evite dar conselhos jurídicos diretos, mas direcione para fontes oficiais. O usuário está em ${paisOrigem || 'um país não especificado'} e tem interesse em ir para ${paisDestino || 'um país não especificado'} buscando ${tipoServico || 'um serviço não especificado'}.
+        // Constrói o prompt para o Gemini
+        let fullPrompt = `Você é um assistente migratório humanitário. Responda à pergunta do usuário de forma clara, amigável e com informações que ajudem no processo migratório. Mantenha um tom profissional mas acolhedor. Evite dar conselhos jurídicos diretos, mas direcione para fontes oficiais.
 
         Pergunta do usuário: "${message}"
 
         Sua resposta:`;
 
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" }); // Ou "gemini-1.5-flash", que é mais leve e rápido
+        const model = genAI.getGenerativeModel({ model: "gemini-pro" }); // Ou "gemini-1.5-flash"
 
         const result = await model.generateContent(fullPrompt);
         const response = await result.response;
@@ -48,7 +50,10 @@ module.exports = async (req, res) => {
         res.status(200).json({ reply: text });
 
     } catch (error) {
-        console.error('Erro ao chamar a API do Gemini:', error);
-        res.status(500).json({ error: 'Ocorreu um erro ao processar sua solicitação com a IA. Tente novamente mais tarde.' });
+        // *** MODIFICAÇÃO CHAVE AQUI: Loga o objeto de erro completo ***
+        console.error('Erro ao chamar a API do Gemini:', JSON.stringify(error, null, 2));
+        // Se o erro tiver uma propriedade 'message' ou 'details', podemos tentar usá-la
+        const errorMessage = error.message || 'Ocorreu um erro desconhecido ao processar sua solicitação com a IA.';
+        res.status(500).json({ error: `Erro da IA: ${errorMessage}. Por favor, tente novamente mais tarde.` });
     }
 };
