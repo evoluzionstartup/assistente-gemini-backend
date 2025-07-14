@@ -41,7 +41,7 @@ module.exports = async (req, res) => {
 
         Sua resposta:`;
 
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" }); // Ou "gemini-1.5-flash"
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Ou "gemini-1.5-flash"
 
         const result = await model.generateContent(fullPrompt);
         const response = await result.response;
