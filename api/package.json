@@ -1,0 +1,12 @@
+{
+  "name": "assistente-gemini-backend",
+  "version": "1.0.0",
+  "description": "Backend para chatbot Gemini do assistente migratório",
+  "main": "api/chat.js",
+  "scripts": {
+    "start": "node api/chat.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.11.0"
+  }
+}
